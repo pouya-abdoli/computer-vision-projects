@@ -14,89 +14,86 @@ def visualize_annotations(data_config, num_samples=5, split='train', colors=None
         split: Dataset split to visualize - 'train', 'val', or 'test' (default: 'train')
         colors: List of colors for each class. If None, uses default colors
     """
-    # Get class names from YAML config
+    # Get class names
     class_names = data_config["names"]
     num_classes = len(class_names)
     
-    # Default colors if not provided
+    # Default colors
     if colors is None:
         default_colors = ['red', 'blue', 'green', 'orange', 'purple', 
                          'cyan', 'magenta', 'yellow', 'brown', 'pink']
         colors = default_colors[:num_classes]
     
-    # Get images directory path for the specified split
-    split_path = data_config[split]
-    train_path = Path(split_path) / 'images'
+    # Get images path
+    split_path = Path(data_config[split])
+    images_path = split_path / 'images'
     
-    # Get all image paths (support multiple extensions)
-    all_images_path = []
-    all_images_path.extend(glob.glob(f"{train_path}/*.png"))
-    all_images_path.extend(glob.glob(f"{train_path}/*.jpg"))
-    all_images_path.extend(glob.glob(f"{train_path}/*.jpeg"))
+    # Get all images
+    all_images = []
+    all_images.extend(glob.glob(f"{images_path}/*.png"))
+    all_images.extend(glob.glob(f"{images_path}/*.jpg"))
+    all_images.extend(glob.glob(f"{images_path}/*.jpeg"))
     
-    # Check if images exist
-    if not all_images_path:
-        print(f"No images found in {train_path}")
+    if not all_images:
+        print(f"No images found in {images_path}")
         return
     
     # Sample random images
-    sample_count = min(num_samples, len(all_images_path))
-    sample_images = random.choices(all_images_path, k=sample_count)
+    sample_count = min(num_samples, len(all_images))
+    sample_images = random.choices(all_images, k=sample_count)
     
+    # Process each image
     for img_path in sample_images:
-        # Load and Convert image (BGR to RGB)
+        # Load image
         img = cv2.imread(img_path)
         if img is None:
-            print(f"Failed to load image: {img_path}")
+            print(f"Failed to load: {img_path}")
             continue
-            
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-        # Get image dimensions: height, width (ignore channels)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         h, w, _ = img.shape
         
-        # Convert string path to Path object for easy manipulation
-        image_path = Path(img_path)
+        # Get label path
+        img_file = Path(img_path)
+        label_path = img_file.parent.parent / "labels" / (img_file.stem + ".txt")
         
-        # Goes from: split/images/image.jpg → split/labels/image.txt
-        label_path = image_path.parent.parent / "labels" / (image_path.stem + ".txt")
+        if not label_path.exists():
+            print(f"No label: {img_path}")
+            continue
         
-        # If label exists: draw bounding boxes
-        if label_path.exists():
-            plt.figure(figsize=(10, 10))
-            plt.imshow(img)
-            ax = plt.gca()
-            
-            # Parse YOLO format: class x_center y_center width height (normalized 0-1)
-            with open(label_path) as f:
-                for line in f:
-                    cls, xc, yc, bw, bh = map(float, line.split())
-                    class_id = int(cls)
-                    
-                    # Get color for this class
-                    color = colors[class_id % len(colors)]
-                    
-                    # Scale normalized YOLO coordinates to absolute pixel values
-                    x1 = (xc - bw/2) * w
-                    x2 = (xc + bw/2) * w
-                    y1 = (yc - bh/2) * h
-                    y2 = (yc + bh/2) * h
-                    
-                    # Create rectangle
-                    rect = plt.Rectangle((x1, y1), x2-x1, y2-y1,
-                                         fill=False,
-                                         edgecolor=color,
-                                         linewidth=2)
-                    ax.add_patch(rect)
-                    
-                    # Draw class label
-                    plt.text(x1, y1-10,
-                             class_names[class_id],
-                             color='white',
-                             fontsize=10,
-                             bbox=dict(facecolor=color, alpha=0.9))
-            
-            plt.axis('off')
-            plt.show()
-        else:
-            print(f"No label found for: {img_path}")
+        # Create plot
+        plt.figure(figsize=(10, 10))
+        plt.imshow(img)
+        ax = plt.gca()
+        
+        # Read labels
+        with open(label_path) as f:
+            for line in f:
+                cls, xc, yc, bw, bh = map(float, line.split())
+                class_id = int(cls)
+                color = colors[class_id % len(colors)]
+                
+                # Convert to pixel coordinates
+                x1 = (xc - bw/2) * w
+                x2 = (xc + bw/2) * w
+                y1 = (yc - bh/2) * h
+                y2 = (yc + bh/2) * h
+                
+                # Draw box
+                rect = plt.Rectangle((x1, y1), x2-x1, y2-y1,
+                                     fill=False, edgecolor=color, linewidth=2)
+                ax.add_patch(rect)
+                
+                # Draw label
+                plt.text(x1, y1-10, class_names[class_id],
+                         color='white', fontsize=10,
+                         bbox=dict(facecolor=color, alpha=0.9))
+        
+        # Show image name at bottom
+        plt.axis('off')
+        
+        # Instead of figtext at bottom, put text on the image
+        plt.text(10, 20, f"Image: {img_file.name}", 
+                color='white', fontsize=12,
+                bbox=dict(facecolor='black', alpha=0.7))
+        plt.show()
