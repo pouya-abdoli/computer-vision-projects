@@ -1,3 +1,6 @@
 Helmet Detect/
 images/
 *.pt
+kaggle_data/
+runs/
+.env

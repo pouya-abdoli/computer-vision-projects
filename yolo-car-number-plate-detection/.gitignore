@@ -1,0 +1,5 @@
+License-Plate-Data/
+__pycache__/
+*.pyc
+*pt
+runs/
